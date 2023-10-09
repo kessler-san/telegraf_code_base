@@ -16,6 +16,7 @@ import (
 	tlsint "github.com/influxdata/telegraf/plugins/common/tls"
 	"github.com/influxdata/telegraf/plugins/outputs"
 	"github.com/influxdata/telegraf/plugins/serializers"
+	_ "github.com/mdlayher/vsock"
 )
 
 //go:embed sample.conf

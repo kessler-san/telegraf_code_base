@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	tlsint "github.com/influxdata/telegraf/plugins/common/tls"
 	"github.com/influxdata/telegraf/plugins/outputs"
 	"github.com/influxdata/telegraf/plugins/serializers"
+	"github.com/lxc/lxd/lxd/vsock"
 	_ "github.com/mdlayher/vsock"
 )
 
@@ -55,26 +57,38 @@ func (sw *SocketWriter) Connect() error {
 		return err
 	}
 
-	var c net.Conn
-	if tlsCfg == nil {
-		c, err = net.Dial(spl[0], spl[1])
+	if spl[0] == "vsock" {
+		//parse CID and port number from address string
+		cid, _ := strconv.ParseUint(strings.SplitN(spl[0], ":", 2)[0], 10, 32)
+		port, _ := strconv.ParseUint(strings.SplitN(spl[1], ":", 2)[0], 10, 32)
+		c, err := vsock.Dial(uint32(cid), uint32(port))
+		if err != nil {
+			return err
+		}
+
+		sw.Conn = c
 	} else {
-		c, err = tls.Dial(spl[0], spl[1], tlsCfg)
-	}
-	if err != nil {
-		return err
-	}
+		var c net.Conn
+		if tlsCfg == nil {
+			c, err = net.Dial(spl[0], spl[1])
+		} else {
+			c, err = tls.Dial(spl[0], spl[1], tlsCfg)
+		}
+		if err != nil {
+			return err
+		}
 
-	if err := sw.setKeepAlive(c); err != nil {
-		sw.Log.Debugf("Unable to configure keep alive (%s): %s", sw.Address, err)
-	}
-	//set encoder
-	sw.encoder, err = internal.NewContentEncoder(sw.ContentEncoding)
-	if err != nil {
-		return err
-	}
+		if err := sw.setKeepAlive(c); err != nil {
+			sw.Log.Debugf("Unable to configure keep alive (%s): %s", sw.Address, err)
+		}
+		//set encoder
+		sw.encoder, err = internal.NewContentEncoder(sw.ContentEncoding)
+		if err != nil {
+			return err
+		}
 
-	sw.Conn = c
+		sw.Conn = c
+	}
 	return nil
 }
 

@@ -223,6 +223,16 @@ func (sl *SocketListener) Start(acc telegraf.Accumulator) error {
 			return err
 		}
 		sl.listener = psl
+	case "vsock":
+		vssl := &streamListener{
+			Encoding: sl.ContentEncoding,
+			Parser:   sl.parser,
+		}
+
+		if err := vssl.setupVsock(u); err != nil {
+			return err
+		}
+		sl.listener = vssl
 	default:
 		return fmt.Errorf("unknown protocol %q in %q", u.Scheme, sl.ServiceAddress)
 	}

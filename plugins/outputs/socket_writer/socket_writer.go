@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -17,8 +18,7 @@ import (
 	tlsint "github.com/influxdata/telegraf/plugins/common/tls"
 	"github.com/influxdata/telegraf/plugins/outputs"
 	"github.com/influxdata/telegraf/plugins/serializers"
-	"github.com/lxc/lxd/lxd/vsock"
-	_ "github.com/mdlayher/vsock"
+	"github.com/mdlayher/vsock"
 )
 
 //go:embed sample.conf
@@ -58,10 +58,25 @@ func (sw *SocketWriter) Connect() error {
 	}
 
 	if spl[0] == "vsock" {
+		addr_tuple := strings.SplitN(spl[1], ":", 2)
+
+		//check if address string has two tokens
+		if len(addr_tuple) < 2 {
+			return fmt.Errorf("CID and/or port number missing")
+		}
+
 		//parse CID and port number from address string
-		cid, _ := strconv.ParseUint(strings.SplitN(spl[0], ":", 2)[0], 10, 32)
-		port, _ := strconv.ParseUint(strings.SplitN(spl[1], ":", 2)[0], 10, 32)
-		c, err := vsock.Dial(uint32(cid), uint32(port))
+		// CID and port numner are 32 bit
+		// source: https://man7.org/linux/man-pages/man7/vsock.7.html
+		cid, _ := strconv.ParseUint(addr_tuple[0], 10, 32)
+		if (cid >= uint64(math.Pow(2, 32))-1) && (cid <= 0) {
+			return fmt.Errorf("CID %d is out of range", cid)
+		}
+		port, _ := strconv.ParseUint(addr_tuple[1], 10, 32)
+		if (port >= uint64(math.Pow(2, 32))-1) && (port <= 0) {
+			return fmt.Errorf("Port numner %d is out of range", port)
+		}
+		c, err := vsock.Dial(uint32(cid), uint32(port), nil)
 		if err != nil {
 			return err
 		}
